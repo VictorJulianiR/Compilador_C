@@ -55,30 +55,31 @@ class CodeGenerator(NodeVisitor):
             self.scope_current=self.scopes.get('global')
             self.visit(no)
         code=copy.deepcopy(self.code)
-        funcs=Pilha()
+        funcs=Fila()
         
         for _decl in node.gdecls:
             if isinstance(_decl, FuncDef):
                 #Mostras cfgs não otimizados
                 
-                
                 _decl.reset()         
-                _decl.get_blocks_bfs(_decl.cfg)
+                _decl.get_blocks_dfs(_decl.cfg)
+                self.clear_jump(_decl.blocks)
                 _decl.reset()         
-                funcs.empilha(_decl.blocks)
+                funcs.insere(_decl.blocks)
                 #opt=Optimization(_decl.cfg,_decl.blocks,self.code,_decl.get_begin(),_decl.get_end())
                 #opt.optimization()
                 #_decl.reset()
                 if(self.cfg):
                     dot = CFG(_decl.decl.id.name)
                     dot.view(_decl.cfg)
-        
+        self.clear_None()
         _llvm=LLVMFunctionVisitor(funcs,self.decl_glob,self.code)
         _llvm.gen_llvm()
                 
         self.code_opt=self.decl_glob+self.code
-        self.code=self.decl_glob+code
-        self.clear_None()
+        #self.code=self.decl_glob+code
+        self.code=self.decl_glob+self.code
+        
 
 
     def visit_GlobalDecl(self, node):
@@ -114,11 +115,6 @@ class CodeGenerator(NodeVisitor):
         inst2=['%entry',]
         self.block_current.append(self.increase_count(),inst2)
         self.code.append(inst2)
-
-        
-
-        
-
 
         #\\\\\\\ Criamos um novo bloco para cada função////////#
         #self.code.append(inst2)
@@ -243,7 +239,6 @@ class CodeGenerator(NodeVisitor):
         self.stk_sco.empilha(self.scope_current)
         escopo=copy.deepcopy(self.scope_current)#Cria um novo escopo cópia, assim ele pode enxergar fora e dentro
         self.scope_current=escopo
-        
        
         #Se for uma bloco com apenas uma label, fazemos ele ser a label atual
         flag=True
@@ -254,6 +249,9 @@ class CodeGenerator(NodeVisitor):
             flag=False
         else:
             label1=escopo.new_temp()
+            inst=["jump",label1]
+            self.code.append(inst)
+            self.block_current.append(self.increase_count(),inst)
             block=ConditionBlock(label1)
 
         #Labels para o Branch
@@ -339,34 +337,29 @@ class CodeGenerator(NodeVisitor):
         label0=escopo.new_temp()
        
         #Se for uma bloco com apenas uma label, fazemos ele ser a label atual
-        flag=True
-        if(len(self.block_current.instructions)==1 and len(self.block_current.instructions[0])==1):
-            self.block_current.changeClass(self.block_current,ConditionBlock)
-            block=self.block_current
-            label1="%"+self.block_current.instructions[0][0]
-            flag=False
-        else:
-            label1=escopo.new_temp()
-            block=ConditionBlock(label1)
-
-
-
+        #flag=True
+        '''      if(len(self.block_current.instructions)==1 and len(self.block_current.instructions[0])==1):
+                    self.block_current.changeClass(self.block_current,ConditionBlock)
+                    block=self.block_current
+                    label1="%"+self.block_current.instructions[0][0]
+                    flag=False
+                else:
+        '''          
+        label1=escopo.new_temp()
         #Labels para o Branch
         label2=escopo.new_temp()
         label3=escopo.new_temp()
         
 
         #\\\\\\\Criamos os 3 blocos do FOR: cond, True e False
-        block1=block
+        block1=ConditionBlock(label1)
         blockT=Block(label2)
         blockF=Block(label3)
         block_incr=Block(label0)
 
-
-
         self.stack_for.empilha(blockF)
 
-
+        
         self.block_current.next_block=block1
         block1.predecessors.append(self.block_current)
 
@@ -377,15 +370,16 @@ class CodeGenerator(NodeVisitor):
         
         block_incr.next_block=block1
         block1.predecessors.append(block_incr)
-
+        inst=["jump",block1.label]
+        self.code.append(inst)
+        self.block_current.append(self.increase_count(),inst)
 
         self.block_current=block1
 
         #Construímos bloco 1
-        if(flag):       
-            inst1=[label1[1:],]
-            self.code.append(inst1)
-            self.block_current.append(self.increase_count(),inst1)
+        inst1=[label1[1:],]
+        self.code.append(inst1)
+        self.block_current.append(self.increase_count(),inst1)
         if(node.cond):     
             self.visit(node.cond)
             #if(node.next):     self.visit(node.next)# Não é preciso criar um bloco apenas para o next.
@@ -403,12 +397,17 @@ class CodeGenerator(NodeVisitor):
         self.block_current.append(self.increase_count(),inst2)
         if(node.stmt):     self.visit(node.stmt)
         #print(self.block_current.instructions[-1][0])
-        if(not ("jump" in  self.block_current.instructions[-1][0])):
+        '''if(not ("jump" in  self.block_current.instructions[-1][0])):
             inst3=['jump',label0]
             self.code.append(inst3)
             self.block_current.append(self.increase_count(),inst3)
-        #Fim
-
+        '''#Fim
+        if(self.block_current.label!=blockT.label):
+            label=block_incr.label
+            inst_jump=["jump",label]
+            self.code.append(inst_jump)
+            self.block_current.append(self.increase_count(),inst_jump)
+        
 
         #Next
         self.block_current.next_block=block_incr
@@ -483,15 +482,15 @@ class CodeGenerator(NodeVisitor):
         block_then.predecessors.append(self.block_current)
         block_else.predecessors.append(self.block_current)
         
+        
+        
 
         if(node.iftrue and node.iffalse):
             label3 = self.scope_current.new_temp()
             block_out=Block(label3)
             block_then.next_block=block_out
             block_else.next_block=block_out
-            block_out.predecessors.append(block_then)
-            block_out.predecessors.append(block_else)
-
+            
             #Condição
             self.visit(node.cond)
             inst1=['cbranch',node.cond.gen_location,label1 , label2]
@@ -504,11 +503,11 @@ class CodeGenerator(NodeVisitor):
             self.code.append(inst2) 
             self.block_current.append(self.increase_count(),inst2)
             self.visit(node.iftrue)
-            inst3=None
-            if(not "jump" in self.block_current.instructions[-1][0]):
-                inst3=['jump', label3]
-                self.code.append(inst3)
-                self.block_current.append(self.increase_count(),inst3)
+            #Aceitamos que o bloco que o  break chama ganhe jump duplo
+            inst3=['jump', label3]
+            self.code.append(inst3)
+            self.block_current.append(self.increase_count(),inst3)
+            block_out.predecessors.append(self.block_current)
             #Fim
 
             #BlocoElse
@@ -517,21 +516,33 @@ class CodeGenerator(NodeVisitor):
             self.code.append(inst4)
             self.block_current.append(self.increase_count(),inst4)
             self.visit(node.iffalse)
-            if(inst3):
-                self.code.append(inst3)
-                self.block_current.append(self.increase_count(),inst3)
-
-
+            #Aceitamos que o bloco que o  break chama ganhe jump duplo
+            inst3=['jump', label3]
+            self.code.append(inst3)
+            self.block_current.append(self.increase_count(),inst3)
+            block_out.predecessors.append(self.block_current)
             #Fim
             
             #BlocoOut
+            ''' 
+                flag_out=False
+                if(block_then.next_block.label==block_out.label):
+                    block_out.predecessors.append(block_then)
+                    flag_out=True
+                if (block_else.next_block.label==block_out.label):
+                    block_out.predecessors.append(block_else)
+                    flag_out=True
+
+                if(flag_out):
+            '''    
+
             self.block_current=block_out
             inst5=[ label3[1:] , ]
-            self.code.append(inst5)
-          
+            self.code.append(inst5)   
             self.block_current.append(self.increase_count(),inst5)
-         
-        
+            
+            self.block_current=block_out
+
         else:
 
             block_then.next_block=block_else
@@ -564,7 +575,11 @@ class CodeGenerator(NodeVisitor):
             self.block_current.append(self.increase_count(),inst3)
 
     def visit_Break(self,node):
+        self.stack_for.empilha(self.block_current)
+        for block in self.stack_for.dados:
+            print("oi",block.label)
         block=self.stack_for.penultimo()
+        print(block.label)
         #print(block.label)
         inst=['jump',block.label]
         self.code.append(inst)
@@ -732,9 +747,9 @@ class CodeGenerator(NodeVisitor):
              
 
     def visit_Assignment(self,node):
-        
         escopo=self.scope_current
         flag=False
+        
         if(node.op!='='):   flag=True
         if(isinstance(node.lvalue,ArrayRef)):
 
@@ -754,7 +769,8 @@ class CodeGenerator(NodeVisitor):
         
         
         else:
-            type=escopo.table_type.lookup(node.lvalue.name).names               
+            type=escopo.table_type.lookup(node.lvalue.name).names
+                           
             if(isinstance(node.rvalue,UnaryOp)):
                 #Aquii
                 var=escopo.table.lookup(node.lvalue.name)
@@ -765,18 +781,20 @@ class CodeGenerator(NodeVisitor):
                     self.code.append(inst)
                     self.block_current.append(self.increase_count(),inst)
                 elif(node.rvalue.op=='++'):
+                
                     self.visit(node.rvalue)
                     inst=[f'store_{type}',node.rvalue.gen_location,var]
                     node.gen_location=var
                     self.code.append(inst)
                     self.block_current.append(self.increase_count(),inst)
                 elif(node.rvalue.op=='p++'):
+                    
                     self.visit(node.rvalue.left)
                     inst=[f'store_{type}',node.rvalue.left.gen_location,var]
                     node.gen_location=var
                     self.code.append(inst)
                     self.block_current.append(self.increase_count(),inst)         
-                    self.visit(node.rvalue)                
+                    self.visit(node.rvalue) 
                 else:
                     self.visit(node.rvalue)
 
@@ -958,11 +976,11 @@ class CodeGenerator(NodeVisitor):
         
         if(not (node.op=='&') ):
             self.visit(node.left)    
-            node.gen_location=target
             target = escopo.new_temp()
+
             inst1 = [f'{self.unary_ops[node.op]}_{type}', node.left.gen_location,node.right.gen_location,target]
             inst2 = [f'store_{type}', target,escopo.table.lookup(name)]
-            node.gen_location=escopo.table.lookup(name)
+            node.gen_location=target
         
         elif(node.op=='&'):
             self.visit(node.left)
@@ -1192,8 +1210,18 @@ class CodeGenerator(NodeVisitor):
     
     def clear_None(self):
         code=[]
-        for i in range(len(self.code_opt)):
-            if(self.code_opt[i][0]):    code.append(self.code_opt[i])
-        self.code_opt=code
-            
+        for inst in self.code:
+            if(inst[0]):    code.append(inst)
+        self.code=code
+    def clear_jump(self,blocks):
+        for b in blocks:
+            flag=False
+            insts=[]
+            for inst in b.instructions:
+                if( not flag):               insts.append(inst)
+                else:                        inst[0]=None
+                if('jump'==inst[0]):       
+                    flag=True
+            b.instructions=insts
+
 
