@@ -7,20 +7,8 @@ class Block(object):
         self.predecessors = []   # List of predecessors    
         self.next_block = None  # Not necessary the same as next_block in the linked list
         self.visit = False
-    
-        self.gen=0
-        self.kill=0
-        self.gdefs=dict()
-        self.r_IN=0
-        self.r_OUT=0
-        self.cop_var_var=dict()
        
-        self.l_IN=set()
-        self.l_OUT=set()
-        self.use=set()
-        self.dfs=set()
-       
-    def append(self,line,inst):
+    def append(self,inst):
         self.instructions.append(inst)
       
     def __iter__(self):
