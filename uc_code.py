@@ -354,8 +354,11 @@ class CodeGenerator(NodeVisitor):
         block1.predecessors.append(blockT)
 
         
-        #Construímos bloco 1
+        #Construímos bloco 1=head
         self.block_current=block1
+        inst=[block1.label[1:],]
+        self.block_current.append(inst)
+        self.code.append(inst)
         self.visit(node.cond)
         inst=['cbranch', node.cond.gen_location, label2, label3]
         self.code.append(inst)
@@ -447,7 +450,7 @@ class CodeGenerator(NodeVisitor):
             if(self.block_current.next_block.label!="%exit"):  flag=True
             self.link_blocks(block_out)
             #Fim
-
+            
             if(flag):
                 #Bloco de saída
                 self.block_current=block_out
