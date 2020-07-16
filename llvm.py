@@ -1,9 +1,9 @@
 from llvmlite import ir, binding
 from ctypes import CFUNCTYPE, c_int
-from engine_llvm import *
-class LLVMFunctionVisitor():
-    def __init__(self,blocks,var_globals,code_funcs):
-
+from engine_llvm import Engine_LLVM
+class LLVMCodeGenerator():
+    def __init__(self,blocks,var_globals,code_funcs,cfg):
+        self.cfg=cfg#Ver depois
         self.engine=Engine_LLVM()
         self.blocks=blocks
         self.var_globals=var_globals
@@ -11,7 +11,7 @@ class LLVMFunctionVisitor():
         self.module = self.engine.module
         self.types={ 
                     "int":  ir.IntType(32),
-                    "float":ir.FloatType,
+                    "float":ir.DoubleType(),
                     "void": ir.VoidType
                     }
 
@@ -40,7 +40,9 @@ class LLVMFunctionVisitor():
                     "define"    :   self.treat_define,
                     "call"      :   self.treat_call,
                     "param"     :   self.treat_param,
-                    "elem"      :   self.treat_elem
+                    "elem"      :   self.treat_elem,
+                    "sitofp"    :   self.treat_conversion,
+                    "fptosi"    :   self.treat_conversion
                     }
         self.math_op={ 
                     "add_int"   :    'add'    ,
@@ -102,7 +104,13 @@ class LLVMFunctionVisitor():
         self.args_call=[]
         self._declare_scanf_function()
         self._declare_printf_function()
-    
+        self.gen_llvm()
+    def treat_conversion(self,inst):
+        _str=inst[0].split()
+        if(_str[0]=="sitofp"):
+            self.vars[inst[2]]=self.builder.sitofp(self.vars[inst[1]], typ=self.types["float"], name=inst[2])
+        else:
+            self.vars[inst[2]]=self.builder.fptosi(self.vars[inst[1]], typ=self.types["int"], name=inst[2])
     def _get_global(self,inst):
         #class llvmlite.ir.GlobalVariable(module, typ, name, addrspace=0)
         _str=inst[0].split("_")
@@ -156,9 +164,8 @@ class LLVMFunctionVisitor():
             var=self._get_global(inst)
             self.vars_globals[inst[1]]=var
         
-
         for inst in self.code_funcs:
-            print(inst)
+
             if(len(inst)>1):
                 _str=inst[0].split("_")    
                 assert self.treat.get(_str[0])!=None ,f'{inst}'
@@ -173,32 +180,33 @@ class LLVMFunctionVisitor():
         _str=inst[0].split("_")
         self.vars=dict()
         self.vars.update(self.vars_globals)
+        self.blocks_llvm=dict()
 
         fnty = ir.FunctionType(self.types[_str[1]], [self.types[v[0]] for v in inst[2] if v[0]!=None ])
         fn = ir.Function(self.module, fnty, inst[1][1:])
         self.funcs[inst[1]]=fn
         self.funcoes.append(fn)
 
-       
         for i,v in enumerate(inst[2]):  
             fn.args[i].name= v[1]
             self.vars[v[1]]=fn.args[i]
         self.func=fn
-        self.blocks_llvm=dict()
         self.blocks_llvm['%entry']=self.func.append_basic_block('%entry')
         self.builder=ir.IRBuilder(self.blocks_llvm['%entry'])
         self.create_basic_blocks()
+
     def create_basic_blocks(self):
-        blocks=self.blocks.desempilha()
+        blocks=self.blocks.retira()
         for block in blocks[1:]:
             name=block.instructions[0][0]
-            if(name.isdigit()):  name="%"+name
+            print(name)
+            name="%"+name
             self.blocks_llvm[name]=self.func.append_basic_block(name)    
-        print(self.blocks_llvm)       
+        #print(self.blocks_llvm)       
         #builder = ir.IRBuilder(fn.append_basic_block('entry'))
     def treat_label(self,inst):
-        if(inst[0].isdigit()):  self.builder.position_at_end(self.blocks_llvm["%"+inst[0]])
-        else:                   self.builder.position_at_end(self.blocks_llvm[inst[0]])
+        assert None!=self.blocks_llvm.get("%"+inst[0]),f'{self.blocks_llvm}'
+        self.builder.position_at_end(self.blocks_llvm["%"+inst[0]])
     def treat_alloc(self,inst):
         _str=inst[0].split("_")
         type=_str[1]
@@ -217,7 +225,7 @@ class LLVMFunctionVisitor():
             _type=ir.ArrayType(self.types[type], dim)
             var=self.builder.alloca(_type, name=inst[1])
         self.vars[inst[1]]=var
-    def treat_store(self,inst): 
+    def treat_store(self,inst):
         var1=self.vars[inst[1]]
         var2=self.vars[inst[2]]
         self.builder.store(var1, var2)
@@ -226,7 +234,7 @@ class LLVMFunctionVisitor():
         #_pointee = var.type.pointee
         res=self.builder.load(var, name=inst[2], align=None)
         #print("to no load",inst ,self.vars.get(inst[2]))
-        if(self.vars.get(inst[2])==None):     self.vars[inst[2]]=res
+        if(not self.vars.get(inst[2])): self.vars[inst[2]]=res
     def treat_literal(self,inst):
         _str=inst[0].split("_")
         self.vars[inst[2]]=ir.Constant(self.types[_str[1]], inst[1])
@@ -236,7 +244,6 @@ class LLVMFunctionVisitor():
     def treat_comp(self,inst):
         _str=inst[0].split("_") 
         if(_str[1]=="int" or _str[1]=="bool"): 
-            print(self.vars[inst[1]],self.vars[inst[2]])
             self.vars[inst[3]]=self.builder.icmp_signed(self.binary[_str[0]], self.vars[inst[1]], self.vars[inst[2]], name=inst[3])
         elif(_str[1]=="float"):
             self.vars[inst[3]]=self.builder.fcmp_ordered(self.binary[_str[0]], self.vars[inst[1]], self.vars[inst[2]], name=inst[3])
@@ -244,7 +251,6 @@ class LLVMFunctionVisitor():
             assert 1==2,f'nao tratei {inst}'
     def treat_logical(self,inst):
         _str=inst[0].split("_")
-        print(inst)
         if(_str[0]=="and"):
             self.vars[inst[3]]=self.builder.and_(self.vars[inst[1]],self.vars[inst[2]],name=inst[3],flags=())
         elif(_str[0]=="or"):
@@ -263,7 +269,6 @@ class LLVMFunctionVisitor():
 
    
     def treat_cbranch(self,inst):
-        print(self.blocks_llvm)
         self.builder.cbranch(self.vars[inst[1]], self.blocks_llvm[inst[2]], self.blocks_llvm[inst[3]])
     def treat_jump(self,inst):
         self.builder.branch(self.blocks_llvm[inst[1]])        

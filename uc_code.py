@@ -57,7 +57,7 @@ class CodeGenerator(NodeVisitor):
         for no in node.gdecls:
             self.scope_current=self.scopes.get('global')
             self.visit(no)
-        code=copy.deepcopy(self.code)
+        
         
         
         for _decl in node.gdecls:
@@ -65,7 +65,7 @@ class CodeGenerator(NodeVisitor):
                 #Mostras cfgs não otimizados
                 
                 _decl.reset()         
-                _decl.get_blocks_dfs(_decl.cfg)
+                _decl.get_blocks_bfs(_decl.cfg)
                 self.clear_jump(_decl.blocks)
                 _decl.reset()         
                 self.funcs_block.insere(_decl.blocks)
@@ -79,11 +79,10 @@ class CodeGenerator(NodeVisitor):
                     dot.view(_decl.cfg)
         self.clear_None()
         #
-        # _llvm=LLVMCodeGenerator(self.funcs_block,self.decl_glob,self.code)
+        #_llvm=LLVMCodeGenerator(self.funcs_block,self.decl_glob,self.code,False)
         #_llvm.gen_llvm()
-
-        self.code_funcs=self.code
-        self.code_opt=self.decl_glob+self.code
+        self.code_funcs=copy.deepcopy(self.code)
+        self.code_opt=self.decl_glob+self.code_funcs
         #self.code=self.decl_glob+code #Otimização
         self.code=self.decl_glob+self.code
         
@@ -119,7 +118,7 @@ class CodeGenerator(NodeVisitor):
         node.begin=self.count
 
 
-        inst2=['%entry',]
+        inst2=['entry',]
         self.block_current.append(inst2)
         self.code.append(inst2)
 
@@ -410,7 +409,7 @@ class CodeGenerator(NodeVisitor):
         block_then.predecessors.append(self.block_current)
         block_else.predecessors.append(self.block_current)
         
-        
+        flag=False
         if(node.iftrue and node.iffalse):
             
             label3 = self.scope_current.new_temp()#Servirá como label de saída do if-else
@@ -432,8 +431,8 @@ class CodeGenerator(NodeVisitor):
             self.block_current.append(inst2)
             self.visit(node.iftrue)
                         
-            
             #Aceitamos que o bloco que o  break chama ganhe jump duplo
+            if(self.block_current.next_block.label!="%exit"):  flag=True
             self.link_blocks(block_out)
 
             #BlocoElse
@@ -445,16 +444,18 @@ class CodeGenerator(NodeVisitor):
             #Fim
 
             #Aceitamos que o bloco que o  break chama ganhe jump duplo
+            if(self.block_current.next_block.label!="%exit"):  flag=True
             self.link_blocks(block_out)
             #Fim
 
-            #Bloco de saída
-            self.block_current=block_out
-            inst5=[ label3[1:] , ]
-            self.code.append(inst5)   
-            self.block_current.append(inst5)
+            if(flag):
+                #Bloco de saída
+                self.block_current=block_out
+                inst5=[ label3[1:] , ]
+                self.code.append(inst5)   
+                self.block_current.append(inst5)
 
-            self.block_current=block_out
+                self.block_current=block_out
 
         else:
 

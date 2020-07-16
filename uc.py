@@ -164,9 +164,7 @@ class Compiler:
     '''
     def _opt(self):
         
-        gen = CodeGenerator(self.args.cfg)
-        gen.visit(self.ast)
-        self.optcode = self.gen.code_opt 
+        self.optcode = self.gen.code
         if not self.args.susy and self.opt_file is not None:
             _str = ''
             for _code in self.optcode:
@@ -181,9 +179,8 @@ class Compiler:
     self.opt.show(buf=self.opt_file)
     '''
     def _llvm(self):
-        gen = CodeGenerator(cfg=False)
-        gen.visit(self.ast)
-        self.llvm = LLVMCodeGenerator(gen.funcs_block, gen.decl_glob,gen.code,self.args.cfg)        
+        
+        self.llvm = LLVMCodeGenerator(self.gen.funcs_block, self.gen.decl_glob,self.gen.code_funcs,self.args.cfg)        
         if not self.args.susy and self.llvm_file is not None:
             self.llvm.engine.save_ir(self.llvm_file)
         if self.run:
