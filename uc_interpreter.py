@@ -1,3 +1,16 @@
+
+# ---------------------------------------------------------------------------------
+# uc: uc_interpreter.py
+#
+# uCInterpreter class: A simple interpreter for the uC intermediate representation
+#                      see https://github.com/iviarcio/mc921
+#
+# Copyright (c) 2019-2020, Marcio M Pereira All rights reserved.
+#
+# This software is provided by the author, "as is" without any warranties
+# Redistribution and use in source form with or without modification are
+# permitted but the source code must retain the above copyright notice.
+# ---------------------------------------------------------------------------------
 import sys
 
 
@@ -150,7 +163,6 @@ class Interpreter(object):
                 elif len(_op) == 1 and _opcode != 'return_void':
                     # labels don't go to memory, just store the pc on dictionary
                     # labels appears as name:, so we need to extract just the name
-                    #self.vars['%' + _opcode[:-1]] = _lpc
                     self.vars['%' + _opcode] = _lpc
             except IndexError:
                 break
@@ -221,7 +233,7 @@ class Interpreter(object):
         else:
             # We reach the end of main function, so return to system
             # with the code returned by main in the return register.
-            print(flush=True)
+            print(end="", flush=True)
             if target is None:
                 # void main () was defined, so exit with value 0
                 sys.exit(0)

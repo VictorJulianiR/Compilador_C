@@ -78,6 +78,12 @@ class Compiler:
         self.total_warnings = 0
         self._ast=[]
 
+        #Prof
+        self.code = None
+        self.total_errors = 0
+        self.total_warnings = 0
+
+
     def _parse(self, susy, ast_file, debug):
         """ Parses the source code. If ast_file != None,
             prints out the abstract syntax tree.
@@ -102,8 +108,8 @@ class Compiler:
         self.gencode = self.gen.code
         #self.optcode = self.gen.code_opt
 
-        _str = ''
         if not susy and ir_file is not None:
+            _str = ''
             for _code in self.gencode:
                 _str += f"{_code}\n"
             ir_file.write(_str)
@@ -124,6 +130,7 @@ class Compiler:
         if self.run:
             self.llvm.execute_ir(self.args.llvm_opt, self.llvm_opt_file)
 
+   
    
 
     def _do_compile(self, susy, ast_file, ir_file, opt_file, cfg, opt, debug):
@@ -166,7 +173,7 @@ def run_compiler():
 
     emit_ast = True
     emit_ir = True
-    run_ir = False
+    run_ir = True
     susy = False
     opt=False
     cfg = False
