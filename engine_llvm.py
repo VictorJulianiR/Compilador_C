@@ -48,7 +48,7 @@ class Engine_LLVM():
     def execute_ir(self, opt=None, opt_file=None):
         mod = self._compile_ir()
         
-        if self.opt:
+        if opt:
             # apply some optimization passes on module
             pmb = self.binding.create_pass_manager_builder()
             pm = self.binding.create_module_pass_manager()
