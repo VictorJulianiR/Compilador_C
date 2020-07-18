@@ -467,7 +467,8 @@ class FuncDecl(Node):
 
     def children(self):
         nodelist = []
-        
+        if self.name is not None: nodelist.append(("name", self.name))
+
         if self.paramlist is not None: nodelist.append(("paramlist", self.paramlist))
 
         if self.vardecl is not None: nodelist.append(("vardecl", self.vardecl))
@@ -839,7 +840,7 @@ binary['%']='mod'
 binary['<']='lt'
 binary['<=']='le'
 binary['>']='gt'
-binary['>=']='gt'
+binary['>=']='gq'
 binary['!=']='ne'
 binary['&']='and'
 binary['||']='or'

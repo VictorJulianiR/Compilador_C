@@ -55,9 +55,6 @@ class UCParser(object):
             last_cr = -1
             
         column = (p.lexpos(token_idx) - (last_cr))
-        '''if(isinstance(type,Compound)):
-            column=1
-        '''
         return Coord(p.lineno(token_idx), column)
 
     
@@ -434,9 +431,10 @@ class UCParser(object):
                     |  type_specifier SEMI
         '''     
         arr=[]
+        #a=p[2]['decl'].name
         for dic in p[2]:
             
-            tmp=12*[None]
+            tmp=13*[None]
             aux1=dic['decl']
             aux2=dic['init']
             tmp[0]=VarDecl( type=p[1], coord=None)
@@ -448,9 +446,6 @@ class UCParser(object):
                 aux1[1].type=p[1]
                 for i in tmp[9]:
                     aux1[1].type.names=f'{aux1[1].type.names}_*'
-
-
-
             else:
                 
                 if( isinstance(aux1,ID) and aux2==None ):
@@ -476,8 +471,7 @@ class UCParser(object):
                     aux1.type=p[1]
 
                 elif(isinstance(aux1,ArrayDecl) and isinstance(aux2,InitList)):
-                    #Temos o tipo type A[]={1,2,3}
-
+                    #Temos o tipo type A[]={1,2,3}   
                     aux1.vardecl.type=p[1]
                     tmp[1]=aux1.name
                     aux1.name.type=p[1]
@@ -499,7 +493,6 @@ class UCParser(object):
                     aux1.vardecl.type=p[1]
                     tmp[1]=aux1.name
                     aux1.name.type=p[1]    
-
                     tmp[5]=aux1
                     tmp[4]=aux2
                 elif(isinstance(aux1,ArrayDecl)):
@@ -512,10 +505,11 @@ class UCParser(object):
                     tmp[1]=aux1
                     aux1.type=p[1]
                     tmp[10]=aux2
-
+                elif(isinstance(aux1,FuncDecl) ):
+                    tmp[12]=aux1
                 else:
                     nada=True                  
-            tmp[8]=Decl(id=tmp[1],const=tmp[3],vardecl=tmp[0],arraydecl=tmp[5],arrayref=tmp[10],initlist=tmp[6],id_2=tmp[2] ,ptrs=tmp[9],binop=tmp[4],funccall=tmp[11] ,coord=self._token_coord(p,1))
+            tmp[8]=Decl(id=tmp[1],funcdecl=tmp[12],const=tmp[3],vardecl=tmp[0],arraydecl=tmp[5],arrayref=tmp[10],initlist=tmp[6],id_2=tmp[2] ,ptrs=tmp[9],binop=tmp[4],funccall=tmp[11] ,coord=self._token_coord(p,1))
             arr.append(tmp[8])
         
         p[0]=arr

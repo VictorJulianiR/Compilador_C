@@ -70,6 +70,6 @@ class Engine_LLVM():
         main_function = CFUNCTYPE(c_int)(main_ptr)
         # Now 'main_function' is an actual callable we can invoke
         res = main_function()
-        print(res)
+        #print(res)
 
 

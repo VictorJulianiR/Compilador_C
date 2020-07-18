@@ -2,7 +2,7 @@ from ast import *
 import copy
 from blocks import *
 from optimization import *
-from llvm import LLVMCodeGenerator
+from uc_llvm import LLVMCodeGenerator
 ######################## -> GenerateCode <- #######################
 class CodeGenerator(NodeVisitor):
     '''
@@ -636,8 +636,27 @@ class CodeGenerator(NodeVisitor):
     
     
         
-    def visit_Print(self,node):
 
+    def gen_pula_lina(self):
+        target=self.new_heap()
+        inst1=[f'litera_char',"\n",target]
+        inst2=['print_char', target]
+        self.code.append(inst1)
+        self.code.append(inst2)
+        self.block_current.append(inst1)
+        self.block_current.append(inst2)
+
+                        
+    def gen_pula_lina(self):
+        target=self.scope_current.new_temp()
+        inst1=[f'literal_char','\n',target]
+        inst2=['print_char', target]
+        self.code.append(inst1)
+        self.code.append(inst2)
+        self.block_current.append(inst1)
+        self.block_current.append(inst2)
+
+    def visit_Print(self,node):
         if(node.expr):
             if(isinstance(node.expr,ExprList)):
                 for e in node.expr.exprs:
@@ -648,6 +667,7 @@ class CodeGenerator(NodeVisitor):
                         self.code.append(inst2)
                         self.block_current.append(inst2)
                         self.decl_glob.append(inst1)
+                        self.gen_pula_lina()
                     
                     else:
                         inst2=None
@@ -660,6 +680,7 @@ class CodeGenerator(NodeVisitor):
                         self.code.append(inst2)
                         self.block_current.append(inst1)
                         self.block_current.append(inst2)
+                        self.gen_pula_lina()
             else:
                 inst2=None
                 self.visit(node.expr)
@@ -672,12 +693,13 @@ class CodeGenerator(NodeVisitor):
                 self.code.append(inst2)
                 #self.block_current.append(inst1)
                 self.block_current.append(inst2)
+                self.gen_pula_lina()
 
         else:
             inst=['print_void', ]
             self.code.append(inst)
             self.block_current.append(inst)
-
+            self.gen_pula_lina()
 
              
 
@@ -687,7 +709,6 @@ class CodeGenerator(NodeVisitor):
         
         if(node.op!='='):   flag=True
         if(isinstance(node.lvalue,ArrayRef)):
-
             self.visit(node.rvalue)
             self.visit(node.lvalue)
             name=node.lvalue.gen_name
@@ -734,9 +755,10 @@ class CodeGenerator(NodeVisitor):
                     self.visit(node.rvalue)
 
             elif(isinstance(node.rvalue,ArrayRef)):
+
                 self.visit(node.rvalue)
                 target=escopo.new_temp()
-                type1=escopo.table_type.lookup(node.rvalue.gen_name).names
+                type1=node.rvalue.type_name
                 inst1=[f'load_{type1}',node.rvalue.gen_location,target]
 
                 var=escopo.table.lookup(node.lvalue.name)
@@ -850,6 +872,22 @@ class CodeGenerator(NodeVisitor):
         escopo=self.scope_current
         self.visit(node.left)
         self.visit(node.right)
+
+        #Preciamos primeiro fazer o load_* se é um arrayRef
+        if(isinstance(node.left,ArrayRef)):
+            target=escopo.new_temp()
+            inst=[f'load_{node.left.type_name}',node.left.gen_location,target]
+            node.left.gen_location=target
+            self.code.append(inst)
+            self.block_current.append(inst)
+        if(isinstance(node.right,ArrayRef)):
+            target=escopo.new_temp()
+            inst=[f'load_{node.right.type_name}',node.right.gen_location,target]
+            node.right.gen_location=target
+            self.code.append(inst)
+            self.block_current.append(inst)
+
+
         if(node.left.type_name=='float' or node.left.type_name=='float'): node.type_name='float'
         elif(node.left.type_name=='int' or node.left.type_name=='int'):   node.type_name='int'
         elif(node.left.type_name=='bool' or node.left.type_name=='bool'): node.type_name='bool'    
@@ -1104,6 +1142,7 @@ class CodeGenerator(NodeVisitor):
 
     def get_Decl(self,pai,defs=[]):
         if(not pai):    return defs
+        
         for filho in pai.exprs:
             if(isinstance(filho,InitList)):         defs=self.get_Decl(filho,defs)
             else:
@@ -1137,17 +1176,45 @@ class CodeGenerator(NodeVisitor):
     def assert_declarations_gloabals_before(self,node):
         "Trada declarações globais antes dos escopos das funções"
         for decl in node:
-            name_id=decl.id.name
-            type=decl.vardecl.type
-            self.scope_current.table.add(name_id,f'@{name_id}')
-            self.scope_current.table_type.add(name_id,type)
-            literal=self.get_literal(decl)
-            if(literal):
-                if literal[1]: inst=[f'global_{type.names}',f'@{name_id}',literal[0],literal[1]]
-                else:          inst=[f'global_{type.names}',f'@{name_id}',literal[0]]
+            if(isinstance(decl.funcdecl,FuncDecl)):
+                funcdecl=decl.funcdecl
+                name_id=funcdecl.name.name
+                type_func=decl.vardecl.type
+                
+                funcdecl.vardecl.type=type_func
+                self.scope_current.table_type.add(f'@{name_id}',type_func)
+
+                p=[]
+                if(funcdecl.paramlist):
+                    for param in funcdecl.paramlist.params:
+                        type=param.vardecl.type.names
+                        id=param.id.name
+                        p.append([type,id])
+
+                inst=[f'global_{type_func.names}',f'@{name_id}',tuple(p)]
+                self.decl_glob.append(inst)
+        
+                #Voltar aquii                
+
             else:
-                inst=[f'global_{type.names}',f'@{name_id}']
-            self.decl_glob.append(inst)
+                name_id=decl.id.name
+                type=decl.vardecl.type
+                self.scope_current.table.add(name_id,f'@{name_id}')
+                self.scope_current.table_type.add(name_id,type)
+                literal=self.get_literal(decl)
+                if(literal):
+                    if literal[1]: inst=[f'global_{type.names}',f'@{name_id}',literal[0],literal[1]]
+                    else:          inst=[f'global_{type.names}',f'@{name_id}',literal[0]]
+                elif(decl.arraydecl and decl.initlist):
+                    values=[]
+                    self.get_Decl(decl.initlist,values)
+                    inst=[f'global_{type.names}_{len(values)}',f'@{name_id}',values]
+                else:
+                    inst=[f'global_{type.names}',f'@{name_id}']
+                    
+                    #values=[]
+                    #self.get_Glob(decl.initlist,values)
+                self.decl_glob.append(inst)
     
     def clear_None(self):
         code=[]

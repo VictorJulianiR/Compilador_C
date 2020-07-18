@@ -79,11 +79,7 @@ class UCLexer(object):
         'SEMI', 'EQUALS','EQ','LBRACE','RBRACE','COMMA','LBRACKET','RBRACKET', 'ADDRESS','LT','LQ','BT','BQ','DIF','OR','AND','RES'
         ,'NOT','PLUSPLUS','MINUSMINUS','TIMESEQUALS', 'DIVIDEEQUALS',
         'RESEQUALS','PLUSEQUALS','MINUSEQUALS'
-
-
     )
-    
-    #
     # Rules
     t_RESEQUALS   = r'\%\='
     t_TIMESEQUALS     = r'\*\='
